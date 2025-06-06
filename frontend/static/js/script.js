@@ -15,36 +15,36 @@ document.addEventListener('DOMContentLoaded', function() {
     const playAudioBtn = document.getElementById('play-audio-btn');
     const recipeAudio = document.getElementById('recipe-audio');
     const audioLoadingIndicator = document.getElementById('audio-loading-indicator');
-    
+
     // Add event listener for form submission
     recipeForm.addEventListener('submit', function(e) {
         e.preventDefault();
         generateRecipe();
     });
-    
+
     // Add event listener for play audio button
     playAudioBtn.addEventListener('click', function() {
         generateAudio();
     });
-    
+
     // Function to generate recipe
     function generateRecipe() {
         // Show loading indicator
         loadingIndicator.style.display = 'flex';
         generateBtn.disabled = true;
-        
+
         // Get form values
         const ingredients = ingredientsInput.value.split(',').map(item => item.trim());
         const dietaryPreference = dietaryPreferenceSelect.value;
         const goal = goalSelect.value;
-        
+
         // Prepare request data
         const requestData = {
             ingredients: ingredients,
             dietary_preference: dietaryPreference,
             goal: goal
         };
-        
+
         // Make API call to generate recipe
         fetch('/api/generate-recipe', {
             method: 'POST',
@@ -62,95 +62,103 @@ document.addEventListener('DOMContentLoaded', function() {
         .then(data => {
             // Display the recipe
             displayRecipe(data);
-            
+
             // Hide loading indicator
             loadingIndicator.style.display = 'none';
             generateBtn.disabled = false;
-            
+
             // Show result section
             resultSection.style.display = 'block';
-            
+
             // Scroll to result section
             resultSection.scrollIntoView({ behavior: 'smooth' });
         })
         .catch(error => {
             console.error('Error:', error);
             alert('An error occurred while generating the recipe. Please try again.');
-            
+
             // Hide loading indicator
             loadingIndicator.style.display = 'none';
             generateBtn.disabled = false;
         });
     }
-    
+
     // Function to display recipe
     function displayRecipe(recipe) {
         // Display recipe name
         recipeName.textContent = recipe.name;
-        
+
         // Display ingredients
         ingredientsList.innerHTML = '';
         recipe.ingredients.forEach(ingredient => {
             const li = document.createElement('li');
-            li.textContent = ingredient;
+            // Render markdown in ingredient
+            li.innerHTML = marked.parse(ingredient);
             ingredientsList.appendChild(li);
         });
-        
+
         // Display instructions
         instructionsList.innerHTML = '';
         recipe.instructions.forEach(instruction => {
             const li = document.createElement('li');
-            li.textContent = instruction;
+            // Render markdown in instruction
+            li.innerHTML = marked.parse(instruction);
             instructionsList.appendChild(li);
         });
-        
+
         // Display nutrition information
         nutritionInfo.innerHTML = '';
         for (const [key, value] of Object.entries(recipe.nutrition)) {
             const p = document.createElement('p');
-            p.textContent = value;
+            // Render markdown in nutrition info
+            p.innerHTML = marked.parse(value);
             nutritionInfo.appendChild(p);
         }
-        
+
         // Display suggestions
         suggestionsList.innerHTML = '';
         recipe.suggestions.forEach(suggestion => {
             const li = document.createElement('li');
-            li.textContent = suggestion;
+            // Render markdown in suggestion
+            li.innerHTML = marked.parse(suggestion);
             suggestionsList.appendChild(li);
         });
     }
-    
+
     // Function to generate audio
     function generateAudio() {
         // Hide audio player
         recipeAudio.style.display = 'none';
-        
+
         // Show loading indicator
         audioLoadingIndicator.style.display = 'flex';
         playAudioBtn.disabled = true;
-        
+
         // Prepare text for TTS
         let recipeText = `Recipe: ${recipeName.textContent}. `;
-        
+
         // Add ingredients
         recipeText += "Ingredients: ";
         const ingredientsItems = ingredientsList.querySelectorAll('li');
         ingredientsItems.forEach((item, index) => {
-            recipeText += item.textContent;
+            // Get plain text content, removing any HTML tags
+            const plainText = item.textContent;
+            recipeText += plainText;
             if (index < ingredientsItems.length - 1) {
                 recipeText += ", ";
             }
         });
         recipeText += ". ";
-        
+
         // Add instructions
         recipeText += "Instructions: ";
         const instructionsItems = instructionsList.querySelectorAll('li');
         instructionsItems.forEach((item, index) => {
-            recipeText += `Step ${index + 1}: ${item.textContent}. `;
+            // Get plain text content, removing any HTML tags
+            const plainText = item.textContent;
+            recipeText += `Step ${index + 1}: ${plainText}. `;
         });
-        
+
         // Make API call to generate audio
         fetch('/api/text-to-speech', {
             method: 'POST',
@@ -171,13 +179,13 @@ document.addEventListener('DOMContentLoaded', function() {
         .then(data => {
             // Set audio source
             recipeAudio.src = data.audio_url;
-            
+
             // Show audio player
             recipeAudio.style.display = 'block';
-            
+
             // Play audio
             recipeAudio.play();
-            
+
             // Hide loading indicator
             audioLoadingIndicator.style.display = 'none';
             playAudioBtn.disabled = false;
@@ -185,7 +193,7 @@ document.addEventListener('DOMContentLoaded', function() {
         .catch(error => {
             console.error('Error:', error);
             alert('An error occurred while generating the audio. Please try again.');
-            
+
             // Hide loading indicator
             audioLoadingIndicator.style.display = 'none';
             playAudioBtn.disabled = false;

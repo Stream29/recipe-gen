@@ -163,7 +163,7 @@ class RecipeGenerator:
                 current_section = 'ingredients'
             elif "Instructions" in line or "Steps" in line or line.startswith("## Instructions"):
                 current_section = 'instructions'
-            elif "Nutritional information" in line or line.startswith("## Nutrition"):
+            elif "Nutritional" in line or line.startswith("## Nutrition"):
                 current_section = 'nutrition'
             elif "Suggestions" in line or "Modifications" in line or line.startswith("## Suggestions"):
                 current_section = 'suggestions'
