@@ -1,16 +1,12 @@
-# This is a sample Python script.
+import os
+import sys
 
-# Press Shift+F10 to execute it or replace it with your code.
-# Press Double Shift to search everywhere for classes, files, tool windows, actions, and settings.
+# Add the current directory to the Python path
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
+# Import the Flask app
+from server.app import app
 
-def print_hi(name):
-    # Use a breakpoint in the code line below to debug your script.
-    print(f'Hi, {name}')  # Press Ctrl+F8 to toggle the breakpoint.
-
-
-# Press the green button in the gutter to run the script.
 if __name__ == '__main__':
-    print_hi('PyCharm')
-
-# See PyCharm help at https://www.jetbrains.com/help/pycharm/
+    # Run the Flask app
+    app.run(debug=True, host='0.0.0.0', port=5000)

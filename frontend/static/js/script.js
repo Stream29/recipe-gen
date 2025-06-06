@@ -1,0 +1,194 @@
+document.addEventListener('DOMContentLoaded', function() {
+    // Get DOM elements
+    const recipeForm = document.getElementById('recipe-form');
+    const ingredientsInput = document.getElementById('ingredients');
+    const dietaryPreferenceSelect = document.getElementById('dietary-preference');
+    const goalSelect = document.getElementById('goal');
+    const generateBtn = document.getElementById('generate-btn');
+    const loadingIndicator = document.getElementById('loading-indicator');
+    const resultSection = document.getElementById('result-section');
+    const recipeName = document.getElementById('recipe-name');
+    const ingredientsList = document.getElementById('ingredients-list');
+    const instructionsList = document.getElementById('instructions-list');
+    const nutritionInfo = document.getElementById('nutrition-info');
+    const suggestionsList = document.getElementById('suggestions-list');
+    const playAudioBtn = document.getElementById('play-audio-btn');
+    const recipeAudio = document.getElementById('recipe-audio');
+    const audioLoadingIndicator = document.getElementById('audio-loading-indicator');
+    
+    // Add event listener for form submission
+    recipeForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        generateRecipe();
+    });
+    
+    // Add event listener for play audio button
+    playAudioBtn.addEventListener('click', function() {
+        generateAudio();
+    });
+    
+    // Function to generate recipe
+    function generateRecipe() {
+        // Show loading indicator
+        loadingIndicator.style.display = 'flex';
+        generateBtn.disabled = true;
+        
+        // Get form values
+        const ingredients = ingredientsInput.value.split(',').map(item => item.trim());
+        const dietaryPreference = dietaryPreferenceSelect.value;
+        const goal = goalSelect.value;
+        
+        // Prepare request data
+        const requestData = {
+            ingredients: ingredients,
+            dietary_preference: dietaryPreference,
+            goal: goal
+        };
+        
+        // Make API call to generate recipe
+        fetch('/api/generate-recipe', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(requestData)
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Network response was not ok');
+            }
+            return response.json();
+        })
+        .then(data => {
+            // Display the recipe
+            displayRecipe(data);
+            
+            // Hide loading indicator
+            loadingIndicator.style.display = 'none';
+            generateBtn.disabled = false;
+            
+            // Show result section
+            resultSection.style.display = 'block';
+            
+            // Scroll to result section
+            resultSection.scrollIntoView({ behavior: 'smooth' });
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('An error occurred while generating the recipe. Please try again.');
+            
+            // Hide loading indicator
+            loadingIndicator.style.display = 'none';
+            generateBtn.disabled = false;
+        });
+    }
+    
+    // Function to display recipe
+    function displayRecipe(recipe) {
+        // Display recipe name
+        recipeName.textContent = recipe.name;
+        
+        // Display ingredients
+        ingredientsList.innerHTML = '';
+        recipe.ingredients.forEach(ingredient => {
+            const li = document.createElement('li');
+            li.textContent = ingredient;
+            ingredientsList.appendChild(li);
+        });
+        
+        // Display instructions
+        instructionsList.innerHTML = '';
+        recipe.instructions.forEach(instruction => {
+            const li = document.createElement('li');
+            li.textContent = instruction;
+            instructionsList.appendChild(li);
+        });
+        
+        // Display nutrition information
+        nutritionInfo.innerHTML = '';
+        for (const [key, value] of Object.entries(recipe.nutrition)) {
+            const p = document.createElement('p');
+            p.textContent = value;
+            nutritionInfo.appendChild(p);
+        }
+        
+        // Display suggestions
+        suggestionsList.innerHTML = '';
+        recipe.suggestions.forEach(suggestion => {
+            const li = document.createElement('li');
+            li.textContent = suggestion;
+            suggestionsList.appendChild(li);
+        });
+    }
+    
+    // Function to generate audio
+    function generateAudio() {
+        // Hide audio player
+        recipeAudio.style.display = 'none';
+        
+        // Show loading indicator
+        audioLoadingIndicator.style.display = 'flex';
+        playAudioBtn.disabled = true;
+        
+        // Prepare text for TTS
+        let recipeText = `Recipe: ${recipeName.textContent}. `;
+        
+        // Add ingredients
+        recipeText += "Ingredients: ";
+        const ingredientsItems = ingredientsList.querySelectorAll('li');
+        ingredientsItems.forEach((item, index) => {
+            recipeText += item.textContent;
+            if (index < ingredientsItems.length - 1) {
+                recipeText += ", ";
+            }
+        });
+        recipeText += ". ";
+        
+        // Add instructions
+        recipeText += "Instructions: ";
+        const instructionsItems = instructionsList.querySelectorAll('li');
+        instructionsItems.forEach((item, index) => {
+            recipeText += `Step ${index + 1}: ${item.textContent}. `;
+        });
+        
+        // Make API call to generate audio
+        fetch('/api/text-to-speech', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                text: recipeText,
+                voice: 'Ethan'
+            })
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Network response was not ok');
+            }
+            return response.json();
+        })
+        .then(data => {
+            // Set audio source
+            recipeAudio.src = data.audio_url;
+            
+            // Show audio player
+            recipeAudio.style.display = 'block';
+            
+            // Play audio
+            recipeAudio.play();
+            
+            // Hide loading indicator
+            audioLoadingIndicator.style.display = 'none';
+            playAudioBtn.disabled = false;
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('An error occurred while generating the audio. Please try again.');
+            
+            // Hide loading indicator
+            audioLoadingIndicator.style.display = 'none';
+            playAudioBtn.disabled = false;
+        });
+    }
+});
