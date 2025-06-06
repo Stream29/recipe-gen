@@ -100,12 +100,17 @@ def stream_recipe():
 @app.route('/api/text-to-speech', methods=['POST'])
 def text_to_speech():
     """
-    Convert text to speech and return the audio URL.
+    Convert text to speech and return the audio URLs.
 
     Expected JSON payload:
     {
         "text": "Text to convert to speech",
         "voice": "optional voice name"
+    }
+
+    Returns:
+    {
+        "audio_urls": ["url1", "url2", ...] - List of audio URLs for each segment
     }
     """
     try:
@@ -116,9 +121,9 @@ def text_to_speech():
         if not text:
             return jsonify({"error": "No text provided"}), 400
 
-        audio_url = tts_service.text_to_speech(text=text, voice=voice)
+        audio_urls = tts_service.text_to_speech(text=text, voice=voice)
 
-        return jsonify({"audio_url": audio_url})
+        return jsonify({"audio_urls": audio_urls})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 

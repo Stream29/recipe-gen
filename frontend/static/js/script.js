@@ -177,18 +177,17 @@ document.addEventListener('DOMContentLoaded', function() {
             return response.json();
         })
         .then(data => {
-            // Set audio source
-            recipeAudio.src = data.audio_url;
+            // Check if we have audio URLs
+            if (!data.audio_urls || data.audio_urls.length === 0) {
+                throw new Error('No audio URLs returned');
+            }
 
-            // Show audio player
-            recipeAudio.style.display = 'block';
+            // Store the audio URLs in a global variable
+            window.audioUrls = data.audio_urls;
+            window.currentAudioIndex = 0;
 
-            // Play audio
-            recipeAudio.play();
-
-            // Hide loading indicator
-            audioLoadingIndicator.style.display = 'none';
-            playAudioBtn.disabled = false;
+            // Set up the audio player
+            playNextAudioSegment();
         })
         .catch(error => {
             console.error('Error:', error);
@@ -198,5 +197,37 @@ document.addEventListener('DOMContentLoaded', function() {
             audioLoadingIndicator.style.display = 'none';
             playAudioBtn.disabled = false;
         });
+    }
+
+    // Function to play audio segments sequentially
+    function playNextAudioSegment() {
+        if (!window.audioUrls || window.currentAudioIndex >= window.audioUrls.length) {
+            // All segments have been played
+            audioLoadingIndicator.style.display = 'none';
+            playAudioBtn.disabled = false;
+            return;
+        }
+
+        // Set audio source to current segment
+        recipeAudio.src = window.audioUrls[window.currentAudioIndex];
+
+        // Show audio player
+        recipeAudio.style.display = 'block';
+
+        // Play audio
+        recipeAudio.play();
+
+        // Set up event listener for when this segment ends
+        recipeAudio.onended = function() {
+            // Move to the next segment
+            window.currentAudioIndex++;
+            playNextAudioSegment();
+        };
+
+        // If this is the first segment, hide loading indicator
+        if (window.currentAudioIndex === 0) {
+            audioLoadingIndicator.style.display = 'none';
+            playAudioBtn.disabled = false;
+        }
     }
 });
