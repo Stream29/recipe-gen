@@ -146,7 +146,6 @@ def stream_text_to_speech():
     try:
         data = request.json
         text = data.get('text', '')
-        print(f"Received text for streaming TTS: {text}")
         voice = data.get('voice', 'Ethan')
 
         if not text:
