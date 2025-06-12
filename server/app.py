@@ -129,6 +129,61 @@ def text_to_speech():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route('/api/stream-text-to-speech', methods=['POST'])
+def stream_text_to_speech():
+    """
+    Stream text-to-speech conversion and return audio URLs as they become available.
+
+    Expected JSON payload:
+    {
+        "text": "Text to convert to speech",
+        "voice": "optional voice name"
+    }
+
+    Returns:
+    A stream of data chunks, each containing a single audio URL, error, or end signal.
+    """
+    try:
+        data = request.json
+        text = data.get('text', '')
+        print(f"Received text for streaming TTS: {text}")
+        voice = data.get('voice', 'Ethan')
+
+        if not text:
+            return jsonify({"error": "No text provided"}), 400
+
+        def generate():
+            # Split text into segments
+            segments = tts_service._split_text(text)
+
+            for segment in segments:
+                if not segment.strip():
+                    continue
+
+                try:
+                    # Generate audio URL for this segment
+                    url = tts_service._tts_single(segment, voice)
+
+                    # Send the URL as a JSON chunk
+                    yield json.dumps({'url': url}) + '\n'
+                except Exception as e:
+                    # Log the error
+                    print(f"Error generating audio for segment: {str(e)}")
+
+                    # Send an error event
+                    yield json.dumps({'error': str(e)}) + '\n'
+
+                    # Continue with the next segment
+                    continue
+
+            # Send an end event to signal that all segments have been processed
+            yield json.dumps({'end': True}) + '\n'
+
+        return Response(stream_with_context(generate()), 
+                       content_type='application/x-ndjson')
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 @app.route('/api/stream-tts', methods=['POST'])
 def stream_tts():
     """

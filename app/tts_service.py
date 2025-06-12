@@ -38,37 +38,8 @@ class TTSService:
             list: A list of text segments.
         """
         # First split by newlines
-        segments = []
         lines = text.split('\n')
-
-        current_segment = ""
-        for line in lines:
-            # If adding this line would exceed the limit, add the current segment to the list
-            # and start a new segment with this line
-            if len(current_segment) + len(line) > self.MAX_TOKEN_LENGTH:
-                if current_segment:
-                    segments.append(current_segment)
-
-                # If the line itself is longer than the limit, split it further
-                if len(line) > self.MAX_TOKEN_LENGTH:
-                    # Split the line into chunks of MAX_TOKEN_LENGTH
-                    for i in range(0, len(line), self.MAX_TOKEN_LENGTH):
-                        segments.append(line[i:i + self.MAX_TOKEN_LENGTH])
-                    current_segment = ""
-                else:
-                    current_segment = line
-            else:
-                # Add this line to the current segment
-                if current_segment:
-                    current_segment += "\n" + line
-                else:
-                    current_segment = line
-
-        # Add the last segment if it's not empty
-        if current_segment:
-            segments.append(current_segment)
-
-        return segments
+        return lines
 
     def text_to_speech(self, text, voice="Ethan", stream=False):
         """

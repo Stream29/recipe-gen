@@ -248,25 +248,26 @@ document.addEventListener('DOMContentLoaded', function() {
         recipeText += "Ingredients: ";
         const ingredientsItems = ingredientsList.querySelectorAll('li');
         ingredientsItems.forEach((item, index) => {
-            const plainText = item.textContent;
-            recipeText += plainText;
-            if (index < ingredientsItems.length - 1) {
-                recipeText += ", ";
-            }
+            recipeText += item.textContent;
+            recipeText += ";";
         });
-        recipeText += ". ";
 
         // Add instructions
-        recipeText += "Instructions: ";
+        recipeText += "\n Instructions: \n";
         const instructionsItems = instructionsList.querySelectorAll('li');
         instructionsItems.forEach((item, index) => {
-            // Get plain text content, removing any HTML tags and cleaning up whitespace
-            const plainText = item.textContent.replace(/\s+/g, ' ').trim();
-            recipeText += `Step ${index + 1}: ${plainText}. `;
+            recipeText += item.textContent;
+            recipeText += "\n";
         });
 
-        // Make API call to generate audio
-        fetch('/api/text-to-speech', {
+        // Initialize audio queue and playback state
+        window.audioQueue = [];
+        window.isPlaying = false;
+        window.isAudioEnded = false;
+        window.streamComplete = false;
+
+        // Make API call to stream audio URLs
+        fetch('/api/stream-text-to-speech', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -280,60 +281,185 @@ document.addEventListener('DOMContentLoaded', function() {
             if (!response.ok) {
                 throw new Error('Network response was not ok');
             }
-            return response.json();
-        })
-        .then(data => {
-            // Check if we have audio URLs
-            if (!data.audio_urls || data.audio_urls.length === 0) {
-                throw new Error('No audio URLs returned');
+
+            // Get a reader from the response body stream
+            const reader = response.body.getReader();
+
+            // Buffer for incomplete chunks
+            let buffer = '';
+
+            // Function to process stream chunks
+            function processStream() {
+                // Read a chunk
+                return reader.read().then(({ done, value }) => {
+                    // If the stream is done, finish up
+                    if (done) {
+                        console.log('Stream complete');
+                        window.streamComplete = true;
+
+                        // If we're not playing and there are no more segments in the queue,
+                        // hide the loading indicator
+                        if (!window.isPlaying && window.audioQueue.length === 0) {
+                            audioLoadingIndicator.style.display = 'none';
+                        }
+                        return;
+                    }
+
+                    // Convert the chunk to text and add to buffer
+                    const chunk = new TextDecoder().decode(value);
+                    buffer += chunk;
+
+                    // Process each complete line
+                    const lines = buffer.split('\n');
+                    // Keep the last line in the buffer if it's incomplete
+                    buffer = lines.pop() || '';
+
+                    for (const line of lines) {
+                        if (line.trim()) {
+                            try {
+                                const data = JSON.parse(line);
+
+                                if (data.url) {
+                                    // Add the URL to the queue
+                                    window.audioQueue.push(data.url);
+                                    console.log('Received audio URL:', data.url);
+
+                                    // If not currently playing, start playback
+                                    if (!window.isPlaying) {
+                                        playNextAudioSegment();
+                                    }
+                                } else if (data.error) {
+                                    // Handle error for a segment
+                                    console.error('Error generating audio for segment:', data.error);
+
+                                    // Display a small notification about the error
+                                    const errorDiv = document.createElement('div');
+                                    errorDiv.className = 'error-notification';
+                                    errorDiv.textContent = 'Error generating audio for a segment. Continuing with next segment.';
+                                    errorDiv.style.color = 'red';
+                                    errorDiv.style.fontSize = '0.8em';
+                                    errorDiv.style.margin = '5px 0';
+
+                                    // Add the notification near the audio player
+                                    if (recipeAudio.parentNode) {
+                                        recipeAudio.parentNode.insertBefore(errorDiv, recipeAudio.nextSibling);
+
+                                        // Remove the notification after 5 seconds
+                                        setTimeout(() => {
+                                            if (errorDiv.parentNode) {
+                                                errorDiv.parentNode.removeChild(errorDiv);
+                                            }
+                                        }, 5000);
+                                    }
+                                } else if (data.end === true) {
+                                    // All segments have been received
+                                    console.log('All audio segments have been received');
+                                    window.streamComplete = true;
+
+                                    // If we're not playing and there are no more segments in the queue,
+                                    // hide the loading indicator
+                                    if (!window.isPlaying && window.audioQueue.length === 0) {
+                                        audioLoadingIndicator.style.display = 'none';
+                                    }
+                                }
+                            } catch (error) {
+                                console.error('Error processing line:', error, line);
+                            }
+                        }
+                    }
+
+                    // Continue processing the stream
+                    return processStream();
+                });
             }
 
-            // Store the audio URLs in a global variable
-            window.audioUrls = data.audio_urls;
-            window.currentAudioIndex = 0;
-
-            // Set up the audio player
-            playNextAudioSegment();
+            // Start processing the stream
+            return processStream();
         })
         .catch(error => {
             console.error('Error:', error);
             alert('An error occurred while generating the audio. Please try again.');
-
-            // Hide loading indicator
             audioLoadingIndicator.style.display = 'none';
             playAudioBtn.disabled = false;
+            window.streamComplete = true;
+        });
+
+        // Handle page unload to clean up resources
+        window.addEventListener('beforeunload', function() {
+            // Any cleanup needed
         });
     }
 
     // Function to play audio segments sequentially
     function playNextAudioSegment() {
-        if (!window.audioUrls || window.currentAudioIndex >= window.audioUrls.length) {
-            // All segments have been played
-            audioLoadingIndicator.style.display = 'none';
-            playAudioBtn.disabled = false;
+        // Check if we're already playing
+        if (window.isPlaying) {
             return;
         }
 
-        // Set audio source to current segment
-        recipeAudio.src = window.audioUrls[window.currentAudioIndex];
+        // Check if there are any URLs in the queue
+        if (window.audioQueue && window.audioQueue.length > 0) {
+            // Mark as playing
+            window.isPlaying = true;
+            window.isAudioEnded = false;
 
-        // Show audio player
-        recipeAudio.style.display = 'block';
+            // Get the next URL from the queue
+            const nextUrl = window.audioQueue.shift();
 
-        // Play audio
-        recipeAudio.play();
+            // Set audio source to current segment
+            recipeAudio.src = nextUrl;
 
-        // Set up event listener for when this segment ends
-        recipeAudio.onended = function() {
-            // Move to the next segment
-            window.currentAudioIndex++;
-            playNextAudioSegment();
-        };
+            // Show audio player
+            recipeAudio.style.display = 'block';
 
-        // If this is the first segment, hide loading indicator
-        if (window.currentAudioIndex === 0) {
+            // Hide loading indicator after first segment starts playing
             audioLoadingIndicator.style.display = 'none';
             playAudioBtn.disabled = false;
+
+            // Play audio
+            recipeAudio.play().catch(error => {
+                console.error('Error playing audio:', error);
+                window.isPlaying = false;
+                playNextAudioSegment(); // Try the next segment
+            });
+
+            // Set up event listener for when this segment ends
+            recipeAudio.onended = function() {
+                // Mark as not playing
+                window.isPlaying = false;
+                window.isAudioEnded = true;
+
+                // Check if there are more segments in the queue
+                if (window.audioQueue.length > 0) {
+                    // Play the next segment
+                    playNextAudioSegment();
+                } else if (window.streamComplete) {
+                    // No more segments and stream is complete, we're done
+                    console.log('All audio segments have been played');
+                } else {
+                    // No more segments but stream is still active, wait for more
+                    console.log('Waiting for more audio segments...');
+
+                    // Show a small loading indicator to indicate waiting for more segments
+                    audioLoadingIndicator.style.display = 'flex';
+                    audioLoadingIndicator.innerHTML = '<div>Loading next segment...</div>';
+                }
+            };
+
+            // Set up error handler
+            recipeAudio.onerror = function() {
+                console.error('Audio playback error');
+                window.isPlaying = false;
+                playNextAudioSegment(); // Try the next segment
+            };
+        } else if (window.isAudioEnded && window.streamComplete) {
+            // No more segments and we've already played something, we're done
+            console.log('No more audio segments to play');
+            audioLoadingIndicator.style.display = 'none';
+        } else {
+            // No segments yet, but we're still waiting for them
+            console.log('Waiting for audio segments...');
+            audioLoadingIndicator.style.display = 'flex';
         }
     }
 });
