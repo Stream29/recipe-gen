@@ -2,6 +2,7 @@ import os
 import base64
 import dashscope
 from dashscope.audio.qwen_tts import SpeechSynthesizer
+from app.llm_logger import LLMLogger
 
 class TTSService:
     """
@@ -11,16 +12,20 @@ class TTSService:
     # Maximum token limit for the TTS API (approximately 500 characters)
     MAX_TOKEN_LENGTH = 500
 
-    def __init__(self, api_key=None):
+    def __init__(self, api_key=None, log_dir="logs"):
         """
         Initialize the TTSService with an API key.
 
         Args:
             api_key (str, optional): The API key for dashscope. If None, it will use the environment variable.
+            log_dir (str, optional): Directory to store logs. Defaults to "logs".
         """
         self.api_key = api_key or os.getenv("DASHSCOPE_API_KEY")
         if not self.api_key:
             raise ValueError("API key is required. Set it as an argument or as DASHSCOPE_API_KEY environment variable.")
+
+        # Initialize logger
+        self.logger = LLMLogger(log_dir=log_dir)
 
     def _split_text(self, text):
         """
@@ -119,6 +124,9 @@ class TTSService:
         Returns:
             str: URL to the audio file.
         """
+        # Log the input
+        self.logger.log_tts(input_text=text, voice=voice, model="qwen-tts")
+
         response = SpeechSynthesizer.call(
             model="qwen-tts",
             api_key=self.api_key,
@@ -127,8 +135,21 @@ class TTSService:
         )
 
         if hasattr(response, 'output') and hasattr(response.output, 'audio') and 'url' in response.output.audio:
-            return response.output.audio["url"]
+            url = response.output.audio["url"]
+
+            # Log the output
+            self.logger.log_tts(input_text=text, output_url=url, voice=voice, model="qwen-tts")
+
+            return url
         else:
+            # Log the error
+            self.logger.log_tts(
+                input_text=text, 
+                output_url=None, 
+                voice=voice, 
+                model="qwen-tts"
+            )
+
             raise Exception("Failed to generate speech")
 
     def _stream_tts_segments(self, segments, voice):
@@ -159,6 +180,9 @@ class TTSService:
         Returns:
             generator: A generator yielding audio chunks.
         """
+        # Log the input
+        self.logger.log_tts(input_text=text, voice=voice, model="qwen-tts")
+
         responses = SpeechSynthesizer.call(
             model="qwen-tts",
             api_key=self.api_key,
@@ -167,13 +191,40 @@ class TTSService:
             stream=True
         )
 
-        for chunk in responses:
-            if hasattr(chunk, 'output') and hasattr(chunk.output, 'audio') and 'data' in chunk.output.audio:
-                audio_string = chunk.output.audio["data"]
-                wav_bytes = base64.b64decode(audio_string)
-                yield wav_bytes
-            else:
-                raise Exception("Failed to generate speech chunk")
+        total_bytes = 0
+        try:
+            for chunk in responses:
+                if hasattr(chunk, 'output') and hasattr(chunk.output, 'audio') and 'data' in chunk.output.audio:
+                    audio_string = chunk.output.audio["data"]
+                    wav_bytes = base64.b64decode(audio_string)
+                    total_bytes += len(wav_bytes)
+                    yield wav_bytes
+                else:
+                    # Log the error
+                    self.logger.log_tts(
+                        input_text=text, 
+                        output_data=None, 
+                        voice=voice, 
+                        model="qwen-tts"
+                    )
+                    raise Exception("Failed to generate speech chunk")
+
+            # Log the output after streaming is complete
+            self.logger.log_tts(
+                input_text=text, 
+                output_data=b'streaming_data', 
+                voice=voice, 
+                model="qwen-tts"
+            )
+        except Exception as e:
+            # Log any exceptions
+            self.logger.log_tts(
+                input_text=text, 
+                output_data=None, 
+                voice=voice, 
+                model="qwen-tts"
+            )
+            raise e
 
     def text_to_speech_file(self, text, output_path, voice="Ethan"):
         """

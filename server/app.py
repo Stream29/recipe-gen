@@ -1,3 +1,4 @@
+import logging
 import os
 import json
 import tempfile
@@ -116,6 +117,7 @@ def text_to_speech():
     try:
         data = request.json
         text = data.get('text', '')
+        print(f"Received text for TTS: {text}")
         voice = data.get('voice', 'Ethan')
 
         if not text:
@@ -141,6 +143,7 @@ def stream_tts():
     try:
         data = request.json
         text = data.get('text', '')
+        print(f"Received text for TTS: {text}")
         voice = data.get('voice', 'Ethan')
 
         if not text:
@@ -170,6 +173,7 @@ def download_tts():
         data = request.json
         text = data.get('text', '')
         voice = data.get('voice', 'Ethan')
+        print(f"Received text for TTS: {text}")
 
         if not text:
             return jsonify({"error": "No text provided"}), 400

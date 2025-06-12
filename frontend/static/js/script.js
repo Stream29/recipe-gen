@@ -91,37 +91,25 @@ document.addEventListener('DOMContentLoaded', function() {
         // Display ingredients
         ingredientsList.innerHTML = '';
         recipe.ingredients.forEach(ingredient => {
-            const li = document.createElement('li');
-            // Render markdown in ingredient
-            li.innerHTML = marked.parse(ingredient);
-            ingredientsList.appendChild(li);
+            ingredientsList.innerHTML += marked.parse(ingredient);
         });
 
         // Display instructions
         instructionsList.innerHTML = '';
         recipe.instructions.forEach(instruction => {
-            const li = document.createElement('li');
-            // Render markdown in instruction
-            li.innerHTML = marked.parse(instruction);
-            instructionsList.appendChild(li);
+            instructionsList.innerHTML += marked.parse(instruction);
         });
 
         // Display nutrition information
         nutritionInfo.innerHTML = '';
         for (const [key, value] of Object.entries(recipe.nutrition)) {
-            const p = document.createElement('p');
-            // Render markdown in nutrition info
-            p.innerHTML = marked.parse(value);
-            nutritionInfo.appendChild(p);
+            nutritionInfo.innerHTML += marked.parse(value);
         }
 
         // Display suggestions
         suggestionsList.innerHTML = '';
         recipe.suggestions.forEach(suggestion => {
-            const li = document.createElement('li');
-            // Render markdown in suggestion
-            li.innerHTML = marked.parse(suggestion);
-            suggestionsList.appendChild(li);
+            suggestionsList.innerHTML += marked.parse(suggestion);
         });
     }
 
@@ -135,13 +123,12 @@ document.addEventListener('DOMContentLoaded', function() {
         playAudioBtn.disabled = true;
 
         // Prepare text for TTS
-        let recipeText = `Recipe: ${recipeName.textContent}. `;
+        let recipeText = "";
 
         // Add ingredients
         recipeText += "Ingredients: ";
         const ingredientsItems = ingredientsList.querySelectorAll('li');
         ingredientsItems.forEach((item, index) => {
-            // Get plain text content, removing any HTML tags
             const plainText = item.textContent;
             recipeText += plainText;
             if (index < ingredientsItems.length - 1) {
@@ -154,8 +141,8 @@ document.addEventListener('DOMContentLoaded', function() {
         recipeText += "Instructions: ";
         const instructionsItems = instructionsList.querySelectorAll('li');
         instructionsItems.forEach((item, index) => {
-            // Get plain text content, removing any HTML tags
-            const plainText = item.textContent;
+            // Get plain text content, removing any HTML tags and cleaning up whitespace
+            const plainText = item.textContent.replace(/\s+/g, ' ').trim();
             recipeText += `Step ${index + 1}: ${plainText}. `;
         });
 
