@@ -45,8 +45,26 @@ document.addEventListener('DOMContentLoaded', function() {
             goal: goal
         };
 
-        // Make API call to generate recipe
-        fetch('/api/generate-recipe', {
+        // Show result section
+        resultSection.style.display = 'block';
+
+        // Initialize recipe structure
+        const recipe = {
+            name: '',
+            ingredients: [],
+            instructions: [],
+            nutrition: {},
+            suggestions: []
+        };
+
+        // Display initial empty recipe
+        displayRecipe(recipe);
+
+        // Scroll to result section
+        resultSection.scrollIntoView({ behavior: 'smooth' });
+
+        // Make API call to stream recipe
+        fetch('/api/stream-recipe', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -57,21 +75,63 @@ document.addEventListener('DOMContentLoaded', function() {
             if (!response.ok) {
                 throw new Error('Network response was not ok');
             }
-            return response.json();
-        })
-        .then(data => {
-            // Display the recipe
-            displayRecipe(data);
 
-            // Hide loading indicator
-            loadingIndicator.style.display = 'none';
-            generateBtn.disabled = false;
+            // Get a reader from the response body stream
+            const reader = response.body.getReader();
 
-            // Show result section
-            resultSection.style.display = 'block';
+            // Accumulated content
+            let accumulatedContent = '';
 
-            // Scroll to result section
-            resultSection.scrollIntoView({ behavior: 'smooth' });
+            // Function to process stream chunks
+            function processStream() {
+                // Read a chunk
+                return reader.read().then(({ done, value }) => {
+                    // If the stream is done, finish up
+                    if (done) {
+                        // Final update with complete content
+                        updateRecipeDisplay(accumulatedContent, true);
+
+                        // Hide loading indicator
+                        loadingIndicator.style.display = 'none';
+                        generateBtn.disabled = false;
+
+                        return;
+                    }
+
+                    // Convert the chunk to text
+                    const chunk = new TextDecoder().decode(value);
+
+                    // Process each line (in case we get multiple SSE messages in one chunk)
+                    const lines = chunk.split('\n\n');
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            try {
+                                const data = JSON.parse(line.substring(6));
+                                if (data.chunk) {
+                                    // Append new chunk to accumulated content
+                                    accumulatedContent += data.chunk;
+
+                                    // Try to parse the accumulated content
+                                    try {
+                                        // Simple parsing to update UI incrementally
+                                        updateRecipeDisplay(accumulatedContent);
+                                    } catch (parseError) {
+                                        console.log('Partial content not yet parseable, continuing to accumulate');
+                                    }
+                                }
+                            } catch (error) {
+                                console.error('Error processing chunk:', error);
+                            }
+                        }
+                    }
+
+                    // Continue processing the stream
+                    return processStream();
+                });
+            }
+
+            // Start processing the stream
+            return processStream();
         })
         .catch(error => {
             console.error('Error:', error);
@@ -81,6 +141,65 @@ document.addEventListener('DOMContentLoaded', function() {
             loadingIndicator.style.display = 'none';
             generateBtn.disabled = false;
         });
+    }
+
+    // Function to update recipe display incrementally
+    function updateRecipeDisplay(content, isFinal = false) {
+        // Simple parsing logic to extract sections from the content
+        const lines = content.split('\n');
+        const recipe = {
+            name: '',
+            ingredients: [],
+            instructions: [],
+            nutrition: {},
+            suggestions: []
+        };
+
+        let currentSection = null;
+
+        for (const line of lines) {
+            const trimmedLine = line.trim();
+            if (!trimmedLine) continue;
+
+            // Try to identify sections
+            if (trimmedLine.includes("Recipe name") || trimmedLine.startsWith("# ")) {
+                recipe.name = trimmedLine.replace("Recipe name:", "").replace("# ", "").trim();
+                currentSection = 'name';
+            } else if (trimmedLine.includes("Ingredients") || trimmedLine.startsWith("## Ingredients")) {
+                currentSection = 'ingredients';
+            } else if (trimmedLine.includes("Instructions") || trimmedLine.includes("Steps") || trimmedLine.startsWith("## Instructions")) {
+                currentSection = 'instructions';
+            } else if (trimmedLine.includes("Nutritional") || trimmedLine.startsWith("## Nutrition")) {
+                currentSection = 'nutrition';
+            } else if (trimmedLine.includes("Suggestions") || trimmedLine.includes("Modifications") || trimmedLine.startsWith("## Suggestions")) {
+                currentSection = 'suggestions';
+            } else {
+                // Add content to the current section
+                if (currentSection === 'ingredients') {
+                    recipe.ingredients.push(trimmedLine);
+                } else if (currentSection === 'instructions') {
+                    recipe.instructions.push(trimmedLine);
+                } else if (currentSection === 'nutrition') {
+                    // Try to parse nutrition information
+                    if (trimmedLine.toLowerCase().includes("calories")) {
+                        recipe.nutrition.calories = trimmedLine;
+                    } else if (trimmedLine.toLowerCase().includes("protein")) {
+                        recipe.nutrition.protein = trimmedLine;
+                    } else if (trimmedLine.toLowerCase().includes("carbs") || trimmedLine.toLowerCase().includes("carbohydrates")) {
+                        recipe.nutrition.carbs = trimmedLine;
+                    } else if (trimmedLine.toLowerCase().includes("fat")) {
+                        recipe.nutrition.fat = trimmedLine;
+                    } else {
+                        recipe.nutrition[`other_${Object.keys(recipe.nutrition).length}`] = trimmedLine;
+                    }
+                } else if (currentSection === 'suggestions') {
+                    recipe.suggestions.push(trimmedLine);
+                }
+            }
+        }
+
+        // Display the recipe
+        displayRecipe(recipe);
     }
 
     // Function to display recipe
